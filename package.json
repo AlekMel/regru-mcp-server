@@ -1,0 +1,57 @@
+{
+  "name": "regru-mcp-server",
+  "version": "1.0.0",
+  "description": "MCP server for REG.RU API 2.0 - domains, DNS, services, billing, and DNSSEC management",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "regru-mcp-server": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "lint": "eslint src --ext .ts",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "regru",
+    "reg.ru",
+    "domain",
+    "dns",
+    "api"
+  ],
+  "author": "AlekMel",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4",
+    "punycode": "^2.3.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.13",
+    "@types/node": "^20.17.6",
+    "@types/punycode": "^2.1.4",
+    "@typescript-eslint/eslint-plugin": "^7.18.0",
+    "@typescript-eslint/parser": "^7.18.0",
+    "eslint": "^8.57.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlekMel/regru-mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/AlekMel/regru-mcp-server/issues"
+  },
+  "homepage": "https://github.com/AlekMel/regru-mcp-server#readme"
+}
