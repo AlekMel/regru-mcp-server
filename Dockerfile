@@ -19,7 +19,8 @@ ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000
 
-RUN addgroup -S mcp && adduser -S mcp -G mcp
+RUN addgroup -S mcp && adduser -S mcp -G mcp \
+  && apk add --no-cache curl wget
 
 COPY --from=build --chown=mcp:mcp /app/package.json ./
 COPY --from=build --chown=mcp:mcp /app/package-lock.json* ./
@@ -29,7 +30,7 @@ COPY --from=build --chown=mcp:mcp /app/dist ./dist
 USER mcp
 EXPOSE 3000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=5 \
   CMD wget -qO- http://127.0.0.1:3000/healthz | grep -q '^ok$' || exit 1
 
 CMD ["node", "dist/index.js"]
