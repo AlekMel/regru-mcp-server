@@ -1,6 +1,8 @@
 # REG.RU MCP Server
 
-MCP-сервер для [REG.API 2.0](https://www.reg.ru/reseller/api2doc): управление доменами, DNS, услугами, биллингом и DNSSEC через Model Context Protocol (stdio).
+MCP-сервер для **[REG.API 2.0](https://www.reg.ru/reseller/api2doc)**: управление доменами, DNS, услугами, биллингом и DNSSEC через Model Context Protocol (stdio).
+
+Официальная документация API: **https://www.reg.ru/reseller/api2doc**
 
 ## Возможности
 
@@ -14,7 +16,33 @@ MCP-сервер для [REG.API 2.0](https://www.reg.ru/reseller/api2doc): уп
 - Учётная запись [Рег.ру](https://www.reg.ru/) с включённым API
 - **Белый список IP** в настройках API личного кабинета (иначе `ACCESS_DENIED_FROM_IP`)
 
-> ⚠️ Если в кабинете не добавлен ни один IP сервера, где крутится MCP, все вызовы будут отклонены.
+> ⚠️ Если в кабинете не добавлен ни один IP сервера, где крутится MCP, все вызовы будут отклонены. Без whitelist работа с API невозможна.
+
+## Партнёрские методы (Партнёры)
+
+Часть методов REG.API доступна **только партнёрам** (reseller). Обычные клиенты получают `RESELLER_AUTH_FAILED`.
+
+В этом MCP помечены как партнёрские:
+
+| Tool / API | Метод REG.API |
+|---|---|
+| `regru_check_domains` | `domain/check` |
+| `regru_suggest_domains` | `domain/get_suggest` |
+| `regru_batch_update_dns` | `zone/update_records` |
+
+Для клиентских аккаунтов используйте одиночные DNS-инструменты (`regru_add_dns_record` / `regru_delete_dns_record`) вместо batch.
+
+## Папки
+
+В официальном API **нет** `folder/get_list`. Доступны: `nop`, `create`, `remove`, `rename`, `get_services`, `add_services`, `remove_services`, `replace_services`, `move_services`, а также `service/get_folders`.
+
+| Tool | Метод |
+|---|---|
+| `regru_get_folder_services` | `folder/get_services` |
+| `regru_get_service_folders` | `service/get_folders` |
+| `regru_create_folder` | `folder/create` |
+| `regru_add_services_to_folder` | `folder/add_services` |
+| `regru_move_services_between_folders` | `folder/move_services` |
 
 ## Установка
 
@@ -44,10 +72,12 @@ REGRU_PASSWORD=test
 |---|---|---|
 | `REGRU_USERNAME` | да | Логин API |
 | `REGRU_PASSWORD` | да* | Пароль API (*или ключ) |
-| `REGRU_PRIVATE_KEY` | нет | PEM-ключ или путь к файлу (RSA-SHA512) |
+| `REGRU_PRIVATE_KEY` | нет | PEM-ключ или путь к файлу (RSA-SHA512 по официальному алгоритму подписи) |
 | `REGRU_BASE_URL` | нет | Базовый URL API (по умолчанию `https://api.reg.ru/api/regru2`) |
 
 Также поддерживается алиас `REGRU_API_BASE_URL`.
+
+Подпись RSA-SHA512 строится по официальному Perl-алгоритму: рекурсивный сбор скалярных значений параметров (включая `username`), пропуск пустых/нулевых/`sig`, лексикографическая сортировка, склейка через `;`, затем RSA-SHA512 + Base64. Подпись считается по **полному** дереву параметров (до `JSON.stringify` для `input_data`). Поля `username` / `password` / `sig` всегда передаются на верхнем уровне формы, не внутри `input_data`.
 
 ## Конфигурация Claude Desktop
 
@@ -93,14 +123,14 @@ REGRU_PASSWORD=test
 
 | Tool | Описание |
 |---|---|
-| `regru_check_domains` | Проверка доступности доменов и цены |
-| `regru_suggest_domains` | Подбор имён по ключевому слову |
+| `regru_check_domains` | Проверка доступности доменов и цены (**Партнёры**: `domain/check`) |
+| `regru_suggest_domains` | Подбор имён по ключевому слову (**Партнёры**) |
 | `regru_get_domain_dns` | Текущие NS (делегирование) |
 | `regru_update_domain_dns` | Смена NS-серверов |
 | `regru_get_dns_records` | Список ресурсных записей зоны |
 | `regru_add_dns_record` | Добавить A/AAAA/CNAME/MX/TXT/NS/SRV/CAA |
 | `regru_delete_dns_record` | Удалить запись |
-| `regru_batch_update_dns` | Пакетное add/delete |
+| `regru_batch_update_dns` | Пакетное add/delete (**Партнёры**: `zone/update_records`) |
 | `regru_list_services` | Список услуг |
 | `regru_get_service_info` | Детали услуги |
 | `regru_renew_service` | Продление (биллинг) |
@@ -108,9 +138,11 @@ REGRU_PASSWORD=test
 | `regru_get_balance` | Баланс аккаунта |
 | `regru_get_unpaid_bills` | Неоплаченные счета |
 | `regru_manage_dnssec` | status / enable / disable |
-| `regru_list_folders` | Список папок |
+| `regru_get_folder_services` | Услуги в папке (`folder/get_services`) |
+| `regru_get_service_folders` | Папки услуги (`service/get_folders`) |
 | `regru_create_folder` | Создать папку |
-| `regru_move_service_to_folder` | Перенести услугу в папку |
+| `regru_add_services_to_folder` | Добавить услуги в папку |
+| `regru_move_services_between_folders` | Перенос между папками (`folder/move_services`) |
 
 ## Resources
 
@@ -143,6 +175,7 @@ npm run lint    # ESLint
 - Транспорт MCP: **stdio** (`@modelcontextprotocol/sdk`)
 - HTTP к REG.API: HTTPS POST, `application/x-www-form-urlencoded`, сложные структуры в `input_data` (JSON)
 - Аутентификация **не** кладётся внутрь `input_data`
+- RSA-подпись по полному дереву параметров (см. [официальные docs](https://www.reg.ru/reseller/api2doc))
 - Token-bucket rate limiter (~18 req/min)
 - Очередь для биллинг-операций (защита от `BILLING_LOCK`)
 - Нормализация IDN → Punycode
