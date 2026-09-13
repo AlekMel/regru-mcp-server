@@ -13,6 +13,7 @@ import { dnssecTools } from './tools/dnssec.js';
 import { folderTools } from './tools/folders.js';
 import { resources, dynamicResources } from './resources/index.js';
 import { prompts } from './prompts/index.js';
+import { startHttpServer } from './http/startHttpServer.js';
 
 function log(...args: unknown[]): void {
   console.error('[regru-mcp]', ...args);
@@ -189,10 +190,7 @@ function registerPrompts(server: McpServer, client: RegruApiClient): void {
   log(`Registered ${Object.keys(prompts).length} prompts`);
 }
 
-async function main(): Promise<void> {
-  const config = loadConfig();
-  const client = new RegruApiClient(config);
-
+function createMcpServer(client: RegruApiClient): McpServer {
   const server = new McpServer({
     name: 'regru-mcp-server',
     version: '1.0.0',
@@ -201,10 +199,58 @@ async function main(): Promise<void> {
   registerTools(server, client);
   registerResources(server, client);
   registerPrompts(server, client);
+  return server;
+}
 
+async function startStdio(client: RegruApiClient): Promise<void> {
+  const server = createMcpServer(client);
   const transport = new StdioServerTransport();
   await server.connect(transport);
   log('REG.RU MCP server started (stdio)');
+}
+
+async function main(): Promise<void> {
+  const config = loadConfig();
+  const client = new RegruApiClient(config);
+
+  const transportMode = (process.env.MCP_TRANSPORT ?? 'stdio').trim().toLowerCase();
+
+  if (transportMode === 'stdio' || transportMode === '') {
+    await startStdio(client);
+    return;
+  }
+
+  if (transportMode === 'http') {
+    const authToken = process.env.MCP_AUTH_TOKEN?.trim();
+    if (!authToken) {
+      console.error(
+        '[regru-mcp] FATAL: MCP_TRANSPORT=http requires MCP_AUTH_TOKEN (long random secret). ' +
+          'Refusing to start an open HTTP MCP endpoint. Generate one with: openssl rand -hex 32'
+      );
+      process.exit(1);
+    }
+
+    const host = process.env.HOST?.trim() || '0.0.0.0';
+    const port = Number(process.env.PORT ?? '3000');
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      console.error(`[regru-mcp] FATAL: Invalid PORT: ${process.env.PORT}`);
+      process.exit(1);
+    }
+
+    await startHttpServer({
+      createServer: () => createMcpServer(client),
+      host,
+      port,
+      authToken,
+      allowedIpsEnv: process.env.MCP_ALLOWED_IPS,
+    });
+    return;
+  }
+
+  console.error(
+    `[regru-mcp] FATAL: Unknown MCP_TRANSPORT="${transportMode}". Use "stdio" (default) or "http".`
+  );
+  process.exit(1);
 }
 
 main().catch((error) => {
