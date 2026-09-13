@@ -7,7 +7,7 @@ describe('normalizeDomain', () => {
   });
 
   it('converts Cyrillic IDN to punycode', () => {
-    expect(normalizeDomain('\u0442\u0435\u0441\u0442.\u0440\u0444')).toBe('xn--e1aybc.xn--p1ai');
+    expect(normalizeDomain('тест.рф')).toBe('xn--e1aybc.xn--p1ai');
   });
 
   it('leaves already-punycode domains unchanged', () => {

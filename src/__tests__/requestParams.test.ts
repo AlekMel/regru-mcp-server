@@ -20,6 +20,7 @@ describe('form/auth param placement', () => {
 
     const parsed = JSON.parse(String(merged.input_data));
     expect(parsed.domains[0].dname).toBe('example.ru');
+    // Auth must not be required inside JSON; top-level wins in form body
     expect(merged.username).toBe('test');
   });
 
@@ -27,7 +28,7 @@ describe('form/auth param placement', () => {
     const auth = buildAuthParams({ username: 'apiuser', password: 'secret' });
     const merged = mergeRequestParams(auth, {
       currency: 'RUR',
-      input_data: { word: '\u0434\u043e\u043c' },
+      input_data: { word: 'дом' },
     });
     const body = buildFormData(merged);
 
@@ -35,7 +36,8 @@ describe('form/auth param placement', () => {
     expect(body).toContain('password=secret');
     expect(body).toContain('currency=RUR');
     expect(body).toContain('input_format=json');
-    expect(decodeURIComponent(body)).toContain('"word":"\u0434\u043e\u043c"');
+    expect(decodeURIComponent(body)).toContain('"word":"дом"');
+    // password appears as a form field, not only inside input_data
     const inputDataPart = body.split('input_data=')[1]?.split('&')[0] ?? '';
     expect(decodeURIComponent(inputDataPart)).not.toContain('password');
   });
