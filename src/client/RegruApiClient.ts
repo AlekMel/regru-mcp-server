@@ -1,12 +1,13 @@
 import { RegruConfig, RegruApiResponse } from './types.js';
-import { buildAuthParams, validateConfig } from './auth.js';
+import { buildAuthParams, signRequestParams, validateConfig } from './auth.js';
 import { normalizeDomain } from './domain.js';
-import { buildFormData, mergeRequestParams } from './requestParams.js';
+import { buildFormData, finalizeRequestParams, mergeRequestParams } from './requestParams.js';
 
 const DEFAULT_BASE_URL = 'https://api.reg.ru/api/regru2';
 
 export { normalizeDomain } from './domain.js';
-export { buildFormData, mergeRequestParams } from './requestParams.js';
+export { buildFormData, finalizeRequestParams, mergeRequestParams } from './requestParams.js';
+export { collectSigValues, makeTextForSig, signRequestParams } from './auth.js';
 
 export class RateLimiter {
   private tokens: number;
@@ -117,7 +118,18 @@ export class RegruApiClient {
 
       const authParams = buildAuthParams(this.config);
       const url = `${this.baseUrl}/${category}/${method}`;
-      const allParams = mergeRequestParams(authParams, params);
+
+      // Keep input_data structured until after signature (official Perl pattern)
+      let allParams = mergeRequestParams(authParams, params, {
+        stringifyInputData: false,
+      });
+
+      if (this.config.privateKey) {
+        const sig = signRequestParams(allParams, this.config.privateKey);
+        allParams = { ...allParams, sig };
+      }
+
+      allParams = finalizeRequestParams(allParams);
       const body = buildFormData(allParams);
 
       let lastError: Error | null = null;
@@ -402,16 +414,76 @@ export class RegruApiClient {
     });
   }
 
-  async listFolders(): Promise<RegruApiResponse> {
-    return this.request('folder', 'get_list', {});
+  /**
+   * List services in a folder (folder/get_services).
+   * Official API has no folder/get_list.
+   */
+  async getFolderServices(options: {
+    folder_id?: number;
+    folder_name?: string;
+  }): Promise<RegruApiResponse> {
+    const params: Record<string, unknown> = {};
+    if (options.folder_id !== undefined) {
+      params.folder_id = options.folder_id;
+    }
+    if (options.folder_name !== undefined) {
+      params.folder_name = options.folder_name;
+    }
+    return this.request('folder', 'get_services', params);
   }
 
-  async moveServiceToFolder(serviceId: number, folderId: number): Promise<RegruApiResponse> {
+  /**
+   * Folders that contain a service (service/get_folders).
+   */
+  async getServiceFolders(options: {
+    service_id?: number;
+    domain_name?: string;
+  }): Promise<RegruApiResponse> {
+    const params: Record<string, unknown> = {};
+    if (options.service_id !== undefined) {
+      params.service_id = options.service_id;
+    } else if (options.domain_name) {
+      params.domain_name = normalizeDomain(options.domain_name);
+    }
+    return this.request('service', 'get_folders', params);
+  }
+
+  /**
+   * Add service(s) to a folder (folder/add_services).
+   * Prefer moveServicesBetweenFolders when relocating between existing folders.
+   */
+  async addServicesToFolder(
+    folderId: number,
+    serviceIds: number[],
+    returnFolderContents = true
+  ): Promise<RegruApiResponse> {
     return this.request('folder', 'add_services', {
       folder_id: folderId,
-      services: [{ service_id: serviceId }],
-      return_folder_contents: 1,
+      services: serviceIds.map(service_id => ({ service_id })),
+      return_folder_contents: returnFolderContents ? 1 : 0,
     });
+  }
+
+  /**
+   * Move services from one folder to another (folder/move_services).
+   */
+  async moveServicesBetweenFolders(options: {
+    service_ids: number[];
+    from_folder_id: number;
+    to_folder_id: number;
+    return_folder_contents?: boolean;
+  }): Promise<RegruApiResponse> {
+    return this.request('folder', 'move_services', {
+      folder_id: options.from_folder_id,
+      new_folder_id: options.to_folder_id,
+      services: options.service_ids.map(service_id => ({ service_id })),
+      return_folder_contents: options.return_folder_contents === false ? 0 : 1,
+    });
+  }
+
+  /** @deprecated Prefer addServicesToFolder or moveServicesBetweenFolders */
+  async moveServiceToFolder(serviceId: number, folderId: number): Promise<RegruApiResponse> {
+    return this.addServicesToFolder(folderId, [serviceId]);
   }
 
   async createFolder(folderName: string): Promise<RegruApiResponse> {
