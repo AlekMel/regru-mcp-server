@@ -1,6 +1,6 @@
 # REG.RU MCP Server
 
-MCP-сервер для **[REG.API 2.0](https://www.reg.ru/reseller/api2doc)**: управление доменами, DNS, услугами, биллингом и DNSSEC через Model Context Protocol (stdio).
+MCP-сервер для **[REG.API 2.0](https://www.reg.ru/reseller/api2doc)**: управление доменами, DNS, услугами, биллингом и DNSSEC через Model Context Protocol (stdio по умолчанию; опционально HTTP Streamable с обязательной аутентификацией).
 
 Официальная документация API: **https://www.reg.ru/reseller/api2doc**
 
@@ -12,7 +12,7 @@ MCP-сервер для **[REG.API 2.0](https://www.reg.ru/reseller/api2doc)**: 
 
 ## Требования
 
-- Node.js 18+
+- Node.js 18+ (для Docker — Node 20 Alpine)
 - Учётная запись [Рег.ру](https://www.reg.ru/) с включённым API
 - **Белый список IP** в настройках API личного кабинета (иначе `ACCESS_DENIED_FROM_IP`)
 
@@ -74,6 +74,11 @@ REGRU_PASSWORD=test
 | `REGRU_PASSWORD` | да* | Пароль API (*или ключ) |
 | `REGRU_PRIVATE_KEY` | нет | PEM-ключ или путь к файлу (RSA-SHA512 по официальному алгоритму подписи) |
 | `REGRU_BASE_URL` | нет | Базовый URL API (по умолчанию `https://api.reg.ru/api/regru2`) |
+| `MCP_TRANSPORT` | нет | `stdio` (по умолчанию) или `http` |
+| `MCP_AUTH_TOKEN` | да при `http` | Длинный случайный секрет Bearer; без него HTTP **не** стартует |
+| `MCP_ALLOWED_IPS` | нет | Список IP/CIDR через запятую; иначе 403 |
+| `HOST` | нет | Адрес bind (по умолчанию `0.0.0.0` в HTTP-режиме) |
+| `PORT` | нет | Порт HTTP (по умолчанию `3000`) |
 
 Также поддерживается алиас `REGRU_API_BASE_URL`.
 
@@ -118,6 +123,57 @@ REGRU_PASSWORD=test
 ```
 
 После сборки можно вызывать бинарь `regru-mcp-server` из `package.json` (`bin`), если пакет установлен глобально или через `npx`.
+
+## Безопасность / Coolify
+
+**Да: голый публичный HTTP MCP без токена — дыра в безопасности.** Любой, кто достучится до `/mcp`, сможет вызывать инструменты от имени ваших учётных данных REG.RU.
+
+### Обязательно
+
+1. `MCP_TRANSPORT=http`
+2. Сильный `MCP_AUTH_TOKEN` (например `openssl rand -hex 32`). Без него процесс **завершится с кодом 1** и не откроет порт.
+3. Все запросы к `/mcp` должны содержать заголовок `Authorization: Bearer <тот же токен>`. Сравнение — через `crypto.timingSafeEqual`. Неверный/отсутствующий токен → `401` + `WWW-Authenticate: Bearer` (без утечки деталей).
+4. Эндпоинт `/healthz` **без** авторизации: отвечает `200` и телом `ok` (только liveness для Coolify/Docker HEALTHCHECK). MCP там нет.
+
+### Рекомендуется дополнительно
+
+- Firewall Coolify / ограничение входящих портов
+- Cloudflare Access (или аналог) перед сервисом
+- `MCP_ALLOWED_IPS` — allowlist IP/CIDR клиентов (при отказе → `403`)
+- Прокси (Coolify Traefik/Caddy) должен корректно выставлять `X-Forwarded-For`; приложение включает `trust proxy`, чтобы `req.ip` отражал клиента
+
+### Пример клиента с Bearer
+
+```json
+{
+  "mcpServers": {
+    "regru-remote": {
+      "url": "https://your-coolify-host.example/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_LONG_RANDOM_MCP_AUTH_TOKEN"
+      }
+    }
+  }
+}
+```
+
+(Точный формат `url`/`headers` зависит от клиента MCP; важно передать Bearer на каждый запрос к `/mcp`.)
+
+### Docker / Coolify
+
+```bash
+# Локально
+export MCP_AUTH_TOKEN=$(openssl rand -hex 32)
+export REGRU_USERNAME=...
+export REGRU_PASSWORD=...
+docker compose up --build -d
+```
+
+В Coolify: Dockerfile из репозитория, переменные окружения как в таблице выше. **Не деплойте без `MCP_AUTH_TOKEN`.**
+
+### Whitelist IP на стороне Reg.ru
+
+Отдельно от MCP-auth: в личном кабинете REG.RU добавьте **egress IP вашего VPS** в белый список API. Иначе API вернёт `ACCESS_DENIED_FROM_IP`, даже если Bearer к MCP верный.
 
 ## Tools
 
@@ -172,7 +228,7 @@ npm run lint    # ESLint
 
 ## Архитектура
 
-- Транспорт MCP: **stdio** (`@modelcontextprotocol/sdk`)
+- Транспорт MCP: **stdio** (по умолчанию) или **HTTP Streamable** (`MCP_TRANSPORT=http`, эндпоинт `/mcp`)
 - HTTP к REG.API: HTTPS POST, `application/x-www-form-urlencoded`, сложные структуры в `input_data` (JSON)
 - Аутентификация **не** кладётся внутрь `input_data`
 - RSA-подпись по полному дереву параметров (см. [официальные docs](https://www.reg.ru/reseller/api2doc))
