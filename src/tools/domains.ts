@@ -4,7 +4,7 @@ import { RegruApiClient } from '../client/RegruApiClient.js';
 
 export const domainTools = {
   regru_check_domains: {
-    description: 'Check domain availability and get prices for one or more domains. Returns availability status and pricing information for each domain.',
+    description: 'Check domain availability and get prices (domain/check + domain/get_prices). Partner-only: domain/check requires reseller access — ordinary clients may get RESELLER_AUTH_FAILED.',
     inputSchema: z.object({
       domains: z.array(z.string()).describe('Array of domain names to check'),
       currency: z.string().optional().default('RUR').describe('Currency code (RUR, USD, EUR)'),
@@ -45,7 +45,7 @@ export const domainTools = {
   },
 
   regru_suggest_domains: {
-    description: 'Get domain name suggestions based on a keyword. Returns a list of available similar domains.',
+    description: 'Get domain name suggestions by keyword (domain/get_suggest). Partner-only — ordinary clients may get RESELLER_AUTH_FAILED.',
     inputSchema: z.object({
       word: z.string().describe('Keyword to generate domain suggestions'),
     }),
