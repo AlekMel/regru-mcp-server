@@ -1,0 +1,19 @@
+# Optional local / Coolify-compatible compose.
+# Set secrets via environment or Coolify UI — do not commit real tokens.
+services:
+  regru-mcp:
+    build: .
+    image: regru-mcp-server:local
+    ports:
+      - "${PORT:-3000}:3000"
+    environment:
+      MCP_TRANSPORT: http
+      HOST: "0.0.0.0"
+      PORT: "3000"
+      MCP_AUTH_TOKEN: "${MCP_AUTH_TOKEN:?set MCP_AUTH_TOKEN}"
+      MCP_ALLOWED_IPS: "${MCP_ALLOWED_IPS:-}"
+      REGRU_USERNAME: "${REGRU_USERNAME:?set REGRU_USERNAME}"
+      REGRU_PASSWORD: "${REGRU_PASSWORD:-}"
+      REGRU_PRIVATE_KEY: "${REGRU_PRIVATE_KEY:-}"
+      REGRU_BASE_URL: "${REGRU_BASE_URL:-}"
+    restart: unless-stopped

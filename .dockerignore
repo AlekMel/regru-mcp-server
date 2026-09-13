@@ -1,0 +1,14 @@
+node_modules
+dist
+.git
+.env
+.env.local
+*.log
+coverage
+*.tsbuildinfo
+.vscode
+.idea
+*.pem
+*.key
+.push_payload.json
+.mcp_push_client.json
