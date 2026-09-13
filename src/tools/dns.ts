@@ -143,7 +143,7 @@ export const dnsTools = {
   },
 
   regru_batch_update_dns: {
-    description: 'Perform multiple DNS record operations (add/delete) in a single batch request.',
+    description: 'Batch add/delete DNS records via zone/update_records. Partner-only — ordinary clients may get RESELLER_AUTH_FAILED. Prefer regru_add_dns_record / regru_delete_dns_record for client accounts.',
     inputSchema: z.object({
       domain_name: z.string().describe('Domain name'),
       actions: z.array(
